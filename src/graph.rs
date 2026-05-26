@@ -16,6 +16,9 @@ pub struct ChainStep {
 #[derive(Debug)]
 pub struct Chain {
     pub steps: Vec<ChainStep>,
+    /// Additional root workflows that are parallel producers into this chain
+    /// (i.e. they feed into the same queue as one of this chain's steps).
+    pub parallel_entries: Vec<String>,
 }
 
 pub struct Graph {
@@ -53,14 +56,54 @@ impl Graph {
                 .then_with(|| a.steps[0].workflow.cmp(&b.steps[0].workflow))
         });
 
-        chains
+        // Merge parallel-producer chains:
+        // If a short chain S has non-root steps that form a suffix of a longer chain L,
+        // S is just a parallel feeder — add S's root to L's parallel_entries and suppress S.
+        let n = chains.len();
+        let mut suppress = vec![false; n];
+
+        for i in 0..n {
+            if chains[i].steps.len() < 2 { continue; }
+            // Non-root steps of S (everything after index 0)
+            let non_root: Vec<&str> = chains[i].steps[1..]
+                .iter()
+                .map(|s| s.workflow.as_str())
+                .collect();
+
+            for j in 0..n {
+                if i == j || suppress[j] { continue; }
+                if chains[j].steps.len() <= chains[i].steps.len() { continue; }
+
+                // Check if non_root is a suffix of chain j's step names
+                let long_names: Vec<&str> = chains[j].steps
+                    .iter()
+                    .map(|s| s.workflow.as_str())
+                    .collect();
+
+                let llen = long_names.len();
+                let slen = non_root.len();
+                if slen <= llen && long_names[llen - slen..] == non_root[..] {
+                    // S is a parallel feeder into L — absorb it
+                    let root = chains[i].steps[0].workflow.clone();
+                    chains[j].parallel_entries.push(root);
+                    suppress[i] = true;
+                    break;
+                }
+            }
+        }
+
+        chains.into_iter()
+            .enumerate()
+            .filter(|(i, _)| !suppress[*i])
+            .map(|(_, c)| c)
+            .collect()
     }
 
     fn trace(&self, start: &str) -> Chain {
         let mut steps = Vec::new();
         let mut visited = HashSet::new();
         self.trace_recursive(start, "", &mut steps, &mut visited);
-        Chain { steps }
+        Chain { steps, parallel_entries: Vec::new() }
     }
 
     fn trace_recursive(&self, node: &str, link_type: &str, steps: &mut Vec<ChainStep>, visited: &mut HashSet<String>) {

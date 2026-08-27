@@ -2,6 +2,7 @@
 name = "ais-chain"
 version = "0.1.0"
 edition = "2021"
+license-file = "LICENSE"
 description = "Discover workflow chains in Azure Logic Apps Standard projects"
 
 [dependencies]

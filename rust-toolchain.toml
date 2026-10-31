@@ -1,0 +1,7 @@
+# Pin the toolchain so every build uses one compiler, matching the AIS apps
+# that depend on this crate. Cargo keys every artifact by rustc version, and a
+# version change re-hashes the whole graph while nothing collects the old
+# artifacts; the host has four toolchains installed.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
